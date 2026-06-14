@@ -69,8 +69,11 @@ export function Analyzer({ goals, planWeek }) {
   const [analysis, setAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [anErr, setAnErr] = useState(null);
+  const detailRef = useRef(null);
 
   const primaryGoal = goals.find((g) => g.active) || goals[0];
+
+  const backToList = () => { setSelected(null); setAnalysis(null); setAnErr(null); };
 
   const loadList = useCallback(async () => {
     setLoadingList(true); setListErr(null);
@@ -89,6 +92,8 @@ export function Analyzer({ goals, planWeek }) {
 
   const runAnalysis = async (act) => {
     setSelected(act); setAnalysis(null); setAnErr(null); setAnalyzing(true);
+    // jump to the detail view right away so the user sees feedback
+    setTimeout(() => { try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {} }, 0);
     try {
       // find prior similar (same type, earlier) for comparison
       const prior = (activities || [])
@@ -108,25 +113,20 @@ export function Analyzer({ goals, planWeek }) {
   };
 
   return (
-    <div className="panel">
+    <div className="panel" ref={detailRef}>
       <div className="section-label">DAILY SESSION ANALYZER</div>
       {loadingList && <Loader text="Pulling recent sessions from Strava…" />}
       {listErr && !loadingList && <ErrorBox msg={listErr} onRetry={loadList} />}
 
-      {activities && !loadingList && (
+      {/* ── LIST VIEW (nothing selected) ── */}
+      {activities && !loadingList && !selected && (
         <>
-          {!selected && (
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
-              Tap a session for a full coach breakdown — lap splits, cardiac drift, comparison to your last similar
-              session, and what it means for {primaryGoal?.primary} at {primaryGoal?.title.split("—")[0].trim()}.
-            </div>
-          )}
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
+            Tap a session for a full coach breakdown — lap splits, cardiac drift, comparison to your last similar
+            session, and what it means for {primaryGoal?.primary} at {primaryGoal?.title.split("—")[0].trim()}.
+          </div>
           {activities.map((a) => (
-            <div
-              key={a.id}
-              className={`activity-row ${selected?.id === a.id ? "selected" : ""}`}
-              onClick={() => runAnalysis(a)}
-            >
+            <div key={a.id} className="activity-row" onClick={() => runAnalysis(a)}>
               <span className="act-icon">{actIcon(a.type)}</span>
               <div className="act-main">
                 <div className="act-name">{a.name}</div>
@@ -139,14 +139,36 @@ export function Analyzer({ goals, planWeek }) {
                 {a.avg_pace && <div className="act-pace">{a.avg_pace}</div>}
                 <div className="act-date">{a.date}</div>
               </div>
+              <span style={{ color: C.mutedDark, fontSize: 18, marginLeft: 4 }}>›</span>
             </div>
           ))}
           <button className="btn btn-full btn-sm mt14" onClick={loadList}>↻ REFRESH SESSIONS</button>
         </>
       )}
 
-      {analyzing && <Loader text="Pulling lap data + analysing against your plan…" />}
-      {anErr && !analyzing && <ErrorBox msg={anErr} onRetry={() => runAnalysis(selected)} />}
+      {/* ── DETAIL VIEW (a session is selected) ── */}
+      {selected && (
+        <>
+          <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={backToList}>← ALL SESSIONS</button>
+          <div className="activity-row selected" style={{ cursor: "default" }}>
+            <span className="act-icon">{actIcon(selected.type)}</span>
+            <div className="act-main">
+              <div className="act-name">{selected.name}</div>
+              <div className="act-meta">
+                {selected.distance_km ? `${selected.distance_km}km · ` : ""}{selected.moving_time || ""}
+                {selected.avg_hr ? ` · ${selected.avg_hr}bpm` : ""}
+              </div>
+            </div>
+            <div className="act-right">
+              {selected.avg_pace && <div className="act-pace">{selected.avg_pace}</div>}
+              <div className="act-date">{selected.date}</div>
+            </div>
+          </div>
+
+          {analyzing && <Loader text="Pulling lap data + analysing against your plan…" />}
+          {anErr && !analyzing && <ErrorBox msg={anErr} onRetry={() => runAnalysis(selected)} />}
+        </>
+      )}
 
       {analysis && !analyzing && (
         <div className="analysis-card">
